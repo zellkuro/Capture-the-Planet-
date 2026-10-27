@@ -1,6 +1,7 @@
-# Capture the Planet: Game Design Document (Draft v0.3)
+# Capture the Planet: Game Design Document (Draft v0.4)
 
-> Status: **planning**. v0.3 adds walk-anywhere planets with gravity toward
+> Status: **planning**. v0.4 confirms the app tilts the avatar to match
+> gravity, and adds the gravity rules and layer plan. v0.3 added walk-anywhere planets with gravity toward
 > each planet's centre, web slinging as the only way to fly (no thrusters), and
 > a match setting for VR-only, PC-only, or mixed lobbies. Checked against the
 > AltspaceVR Creator SDK docs (https://altvr.app/docs/).
@@ -157,41 +158,63 @@ The goal: touch a planet anywhere and your body turns so your feet face the
 planet, gravity pulls straight toward its centre, and you can walk all the
 way around it.
 
-**Gravity toward the centre: the docs support it.** Each player's page knows
-where its own player is (`pose-update`, up to 30 times a second). It finds
-the planet whose gravity well they're in and calls
-`scene.Gravity(towardCentre × strength)`. Outside every well, it sets zero.
-Small planets can have weaker gravity than big ones.
+**Tilting the avatar works.** Tested by the designer with the
+GravityRaycastSystem package (5.3a): when gravity is pointed at a wall, the
+app turns the player to stand on it. So we only control gravity, and the app
+handles the player's body. The "planet walker" seat workaround from v0.3 is
+no longer needed.
 
-**Turning the player to the surface: not in the docs. This is the
-biggest risk in the project.** There is no call to tilt a player's body or
-"up" direction:
-- `TeleportTo` and spawns only take a turn around the vertical axis.
-- The settings page says "players don't tumble yet". The avatar appears to
-  stay upright to the world, so on the side of a planet, players would
-  stand sideways and slide off.
+#### How gravity is chosen
+Each player's own page runs this for that player only (gravity is local):
 
-The same page lists a tumble-related setting as already applied in the app
-"but players don't tumble yet", which suggests the developers are working on
-free player rotation. Three paths, in order:
+1. **Find the gravity source.** Short rays from the player (head, feet; as in
+   the package) hit **only gravity-surface layers** (see the table below).
+   Rocks, cover, players, flags and guns are on other layers, so they never
+   flip anyone's gravity. This is the designer's existing layer approach.
+2. **Point gravity by surface type:**
+   - **Planet surface → toward the planet's centre.** Bumps, crater walls
+     and low-poly facets on the planet don't tilt the player; only the
+     planet's centre matters.
+   - **Station / flat surface → into the surface (its normal)**, as the
+     package does today. This lets a station have walkable walls and
+     ceilings if we want them.
+3. **Keep the pull while in a planet's gravity well.** If the rays miss
+   (over a crater edge, mid-jump), gravity keeps pointing at the planet's
+   centre until the player leaves the well.
+4. **Outside every well and off every surface → zero-g.**
+5. **Blend, don't snap.** The gravity direction turns over about 0.2–0.3 s
+   instead of in one frame, so moving from a planet to the station doesn't
+   flip the view instantly. **[SPIKE]** Check that the app's body turn
+   follows the blend smoothly.
 
-1. **Ask SideQuest first.** Ask whether player rotation (custom "up" or
-   tumbling) is coming, and when. If it lands, this feature becomes simple.
-2. **[SPIKE] "Planet walker" workaround.** When a player touches a planet,
-   their page attaches them to an invisible walker object (`AttachedObject`
-   with `AvatarAttachTo`, like a vehicle). The script keeps that object
-   upright against the surface and moves it around the planet from the
-   player's stick input (VR stick events, or keys on PC, with the normal
-   stick movement blocked). Jumping or firing a web detaches the player back
-   into free flight. Two things to find out: does the player's body and view
-   *rotate* with the object, or only move with it? And does it feel OK?
-3. **Fallback:** flat landing decks on each planet that face the same way, so
-   the player never needs to tilt. This is v0.2's plan, which works with what
-   the docs confirm today.
+The gravity well is a large invisible sphere trigger around each planet,
+about 2× the planet's radius. A trigger, not a ray, tells the page "you're
+in Planet X's well", so it works even when the rays miss. Wells shouldn't
+overlap. If two ever do, the nearer planet's centre wins.
 
-**Comfort:** in VR, turning the player's view without their control is a top
-cause of motion sickness. The turn onto the surface should be quick (about
-0.3 s) or hidden by a short fade, with a comfort option for each player.
+#### Layer plan (SDK slots)
+The SDK fixes what each layer slot does; the plan below uses the slots
+whose built-in behaviour matches.
+| Slot | Name (ours) | Used for | Why this slot |
+|---|---|---|---|
+| 6 | PlanetSurface | Planet ground: gravity toward the centre | UserLayer2–7: walkable, web-slingable, body collides |
+| 7 | StationSurface | Station floors and walls: gravity into the surface | Same |
+| 8 | Rock | Asteroids, cover, planet props: no gravity change | Same, but gravity rays ignore it |
+| 13 | GravityWell | Well triggers around planets | UserLayer9–15: ground, teleport and web ignore it |
+| 14 | Hitbox | Player hitboxes (vests) | Same; trigger colliders only, so they don't push the player |
+| 20 | Grabbable | Flags, guns | SDK grab layer |
+
+Gravity rays use a layer mask with only 6 and 7. Gun rays use 6, 7, 8 and 14,
+so planets, the station, and rocks all block shots. **[SPIKE]** The web can
+attach to the Grabbable layer, so players may be able to web the flag.
+Decide whether that's a feature (yank the flag toward you) or blocked.
+
+**Comfort:** turning the player's view without their control is a top cause
+of motion sickness in VR. The blend above helps; add a per-player comfort
+option (a short fade during big gravity changes).
+
+**Fallback** if tilting proves unreliable in multiplayer or on Quest: flat
+landing decks on each planet that all face the same way (v0.2's plan).
 
 ### 5.3a Reference: the GravityRaycastSystem package
 A community example package (`GravityRaycastSystem.unitypackage`, a Visual
@@ -204,35 +227,19 @@ Scripting graph plus a settings panel) was reviewed for this design.
   optionally the feet or a hand) at set angles.
 - On a hit it sets `Physics.gravity = −(surface normal) × 9.81`.
 - With no hit it resets gravity to normal (straight down).
-- It does **not** rotate the player. Any tilting of the avatar has to come
-  from the app's own player controller reacting to the new gravity direction.
+- It doesn't rotate the player itself. The app turns the avatar to match the
+  new gravity direction (confirmed by the designer's testing).
 
 **What we keep:** the approach. A local graph or script that changes
 `Physics.gravity` from a raycast uses only SDK features (attachments,
 `Physics.Raycast`, setting gravity), so it should pass the Builder's checks.
 
-**What we change for planets:**
-1. **No hit → zero-g, not normal gravity.** Inside a planet's gravity well,
-   keep pulling toward the planet even when the ray misses. That stops a
-   player who walks over a crater edge or jumps from losing gravity
-   mid-step. Only leaving the well sets zero.
-2. **Aim at the planet's centre, not the surface normal.** Normals jump
-   around on rocks, crater walls, and low-poly facets. The ray (or the
-   well's trigger) tells us *which* planet; gravity then points at that
-   planet's centre. Use a sphere collider for each planet's gravity, with
-   detailed mesh colliders only for what players stand on.
-3. **Ignore players, flags and guns in the ray**, so a teammate or a held
-   object can't flip someone's gravity. Give the rays their own layer mask.
-4. **Port it to the game's JavaScript**, or keep it as a graph that reads the
-   game's state, so the brig, lobby and arena can switch it on and off.
-5. **Ignore the package's `WorldCanvas.cs`.** Custom C# scripts don't run in
-   published worlds (only in Play mode), so the settings panel may need
-   another way to face the player.
-
-**Still open (S3):** whether the app turns the avatar to match a sideways
-gravity direction. Checking this is the first test: drop the package into a
-world, walk onto a wall in the headset, and see whether the body and view
-tilt.
+**What changes for planets:** see 5.3. Zero-g instead of normal gravity when
+off every surface, centre-pull for planet surfaces, the gravity well,
+blending, and layer-only rays (the designer's existing approach). The
+package's `WorldCanvas.cs` is a custom C# script, and those don't run in
+published worlds, so the settings panel may need another way to face the
+player.
 
 ### 5.4 Flag carrier movement
 - The flag takes one hand, so the carrier always slings with **one hand
@@ -252,7 +259,7 @@ The host picks the mode in the lobby before team select:
 Things to know for PC players:
 - Web slinging works with Q/E.
 - Controller stick and button events don't fire on desktop, so the PC gun
-  and the planet walker's movement need keyboard input. **[SPIKE]** Desktop
+  need keyboard input. **[SPIKE]** Desktop
   only gets key presses, with no key-release event. That may make PC
   walking on planets awkward.
 - PC aiming with a mouse is usually more accurate than VR aiming. If mixed
@@ -437,7 +444,7 @@ user state (each player writes their own)
 | Station | normal | on | off | on |
 | Practice ring | zero, plus a small practice planet | off | on | on |
 | Arena (open space) | zero | **off** | on | on |
-| Inside a planet's gravity well | toward planet centre, updated as the player moves | off | on | on (planet walker if S3 works) |
+| Inside a planet's gravity well | toward planet centre, updated as the player moves | off | on | on |
 | Brig | normal | off | off | on |
 
 Each page keeps **one** `BS.SceneSettings` object and resends it whenever the
@@ -457,7 +464,7 @@ player changes area, because `SetSettings` resets anything it doesn't include.
 |---|---|---|
 | S1 | Do zero-g and web slinging feel good in a headset? Does anyone get stranded? | The whole game rests on it |
 | S2 | Gravity toward a planet's centre, updated from the player's position: smooth, with no jitter? | Planet gravity |
-| S3 | Does the app turn the avatar to match sideways gravity? Test with the GravityRaycastSystem package (5.3a) first, then ask SideQuest, then try the planet walker | Walk-anywhere planets. **Highest risk** |
+| S3 | ~~Does the app turn the avatar to match sideways gravity?~~ **Yes** (designer's test). Remaining: does the turn follow a blended gravity change smoothly, and does it look right to *other* players? | Walk-anywhere planets |
 | S4 | Can a raycast hit hitbox colliders attached to other avatars, and do those colliders stay out of the way of players' bodies? | Hit detection |
 | S5 | Can a holstered gun be grabbed and re-holstered? | Gun / flag hand flow |
 | S6 | One-shot volume: 10 players × 2 shots/s plus hits. Any rate limits? | Combat networking |
@@ -506,7 +513,7 @@ player changes area, because `SetSettings` resets anything it doesn't include.
 ## 13. Roadmap
 | Phase | Goal | Output |
 |---|---|---|
-| 0. Spikes | Ask SideQuest about player rotation; S1, S2, S3, S4, S5 in a test world | Go/no-go on walk-anywhere planets, movement, and combat |
+| 0. Spikes | S1, S2, S3, S4, S5 in a test world | Go/no-go on walk-anywhere planets, movement, and combat |
 | 1. Graybox | Station, arena with simple planets, brigs | Flyable world |
 | 2. Core loop | Referee, teams, guns, hits, brig, respawn | 2v2 playtest |
 | 3. Flag | Grab, carry-locks-gun, drop, return, capture, sudden death | 5v5 playtest |
@@ -514,9 +521,8 @@ player changes area, because `SetSettings` resets anything it doesn't include.
 | 5. Extras | More maps, modes, cosmetics | Post-launch |
 
 ## 14. Open decisions
-1. **If player rotation isn't possible yet** (S3 fails and SideQuest has no
-   date): launch with flat landing decks and add walk-anywhere later, or wait
-   for it?
+1. **Webbing the flag:** allow players to web the flag and yank it toward
+   them, or block it?
 2. **Mixed-mode fairness tweaks** (VR aim assist or PC fire cooldown): decide
    after playtests.
 
