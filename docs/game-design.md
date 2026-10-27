@@ -1,8 +1,9 @@
-# Capture the Planet: Game Design Document (Draft v0.2)
+# Capture the Planet: Game Design Document (Draft v0.3)
 
-> Status: **planning**. v0.2 adds the zero-g space map, records the decisions
-> made on v0.1, and checks the design against the AltspaceVR Creator SDK docs
-> (https://altvr.app/docs/).
+> Status: **planning**. v0.3 adds walk-anywhere planets with gravity toward
+> each planet's centre, web slinging as the only way to fly (no thrusters), and
+> a match setting for VR-only, PC-only, or mixed lobbies. Checked against the
+> AltspaceVR Creator SDK docs (https://altvr.app/docs/).
 >
 > Markers:
 > - **[DECIDE]**: still needs an answer from the designer.
@@ -20,8 +21,9 @@ sends a player to the brig (penalty box) for 30 seconds. A player holding
 the flag can't shoot.
 
 **Design pillars**
-1. **Movement is the skill.** Grappling from planet to planet, judging drift,
-   and landing cleanly should feel great before a single shot is fired.
+1. **Movement is the skill.** Web slinging from planet to planet, judging
+   drift, and landing anywhere on a planet should feel great before a single
+   shot is fired.
 2. **Readable at a glance.** You can always tell team, health, and flag status
    without a menu, even while upside down in space.
 3. **Carrying the flag is a choice.** The carrier is defenceless, so the team
@@ -33,7 +35,12 @@ the flag can't shoot.
 | Topic | Decision |
 |---|---|
 | Teams | 5v5, 10 players |
-| Theme | Space. Red Planet vs Blue Planet (team names can still change) |
+| Theme | Space. Team names: **Red Planet vs Blue Planet** (final) |
+| Platforms | Host picks per match: **VR only**, **PC only**, or **mixed** |
+| Planets | **Land anywhere.** Gravity pulls toward the planet's centre and the player turns to stand on the surface |
+| Flying | **Web slinging** only (no thrusters) |
+| Carrier penalty | **Yes.** Slower web reel, and only one hand free to sling |
+| Hit knockback | **Yes** |
 | Win | First to **3 captures**, or most captures after **15 min** |
 | Tie | **2-minute sudden death**: next capture wins. Still tied: draw |
 | Shields | 3 pips. 1 pip regenerates after 10 s without a hit |
@@ -82,7 +89,7 @@ the flag can't shoot.
 - **Ready buttons**, a **rules board**, the **scoreboard**, and host controls
   for the world owner and moderators (force start, end match, shuffle teams).
 - **Practice ring:** a small zero-g bubble off the side of the station. Players
-  can try the grapple and thrusters before a match. This matters because
+  can try web slinging and walking on a small planet before a match. This matters because
   zero-g movement is new to most people.
 - **Observation deck:** big windows onto the arena, for spectators.
 
@@ -92,9 +99,12 @@ the flag can't shoot.
 - **Symmetric layout:** a home planet at each end, with a matching set of
   moons and asteroids in between. A large central planet ("Core") blocks
   the direct line between the bases.
-- **Planets and moons:** places to land, take cover, and grapple onto. Each one
-  has a **landing deck**, a flat walkable area with local gravity (see 5.3).
-- **Asteroids:** small rocks with no gravity. Grapple anchors and cover only.
+- **Planets and moons:** round bodies you can land on **anywhere** and walk
+  all the way around (see 5.3). Each has a gravity well: inside it, gravity
+  pulls toward the planet's centre.
+- **Asteroids:** small rocks with no gravity. Web anchors and cover only. They
+  are spaced so that from anywhere in the arena there is always something
+  within web range. Nobody gets stranded.
 - **Home planet:** a flag stand in a "home zone" ring (the capture point),
   5 spawn pods, and the team's brig.
 - **Boundary:** a soft energy fence that pushes players back toward the
@@ -112,57 +122,101 @@ the flag can't shoot.
 
 ## 5. Zero-g movement
 
-This is the riskiest and most important part of the design. Everything
-here is based on what the SDK says it supports.
+This is the riskiest and most important part of the design.
 
 ### 5.1 Tools the SDK gives us
 | Tool | What the docs say |
 |---|---|
-| **Grapple** | Built in: `EnableSpiderMan`. Fire a rope with the trigger (Q/E on desktop), reel in with grip. Range and reel speed are adjustable |
-| **Gravity** | `scene.Gravity(vector)` sets gravity for the local player. `(0,0,0)` is zero-g |
-| **Thrust** | `scene.AddPlayerForce(vector, VelocityChange)` pushes the local player |
-| **Air control** | `PhysicsAirControlSpeed` and `PhysicsAirControlAcceleration` set how much the stick steers a player in the air |
+| **Web slinging** | Built in: the "grapple" (`EnableSpiderMan`). Fire a web with the trigger (Q/E on desktop), reel in with grip. Range, reel speed and springiness are adjustable |
+| **Gravity** | `scene.Gravity(vector)` sets the gravity *direction and strength* for the local player. `(0,0,0)` is zero-g |
+| **Pushes** | `scene.AddPlayerForce(...)` pushes the local player (used for knockback and the boundary) |
+| **Air control** | `PhysicsAirControlSpeed` and `PhysicsAirControlAcceleration` set how much the stick steers in the air |
 | **Drag** | `PhysicsDrag` sets air resistance on the player body |
-| **Push-off** | `PhysicsGorillaMode` lets VR players move by pushing off surfaces with their hands |
 | **Lockouts** | `SetCanTeleport`, `SetCanGrapple`, `SetCanJump`, `SetCanMove` per player |
+| **Seats / vehicles** | `AttachedObject` with `AvatarAttachTo` puts the player *on* an object and holds them to it |
+| **Input** | VR controller stick and button events reach the page, and can be blocked from their usual jobs. Desktop gets key presses only |
 
-### 5.2 Recommended movement kit
-1. **Grapple (main movement).** Range about 30 m, so you can only reach the
-   next rock, not the enemy base. It's tactical and you can see it coming.
-2. **Thruster bursts.** Pressing a face button gives a short
-   `AddPlayerForce` push in the direction the player is looking. It has 3
-   charges that recharge over time, so a player drifting in open space can
-   always recover.
-3. **A little drag** (`PhysicsDrag` small), so players slowly come to a stop
-   instead of drifting forever. That's less realistic, but much more playable.
-4. **Stick air control kept low**, so players can fine-tune but not "fly"
-   freely.
-5. **Bird flight off** (`EnableBirdFlight: false`) and **teleport off** in the
-   arena.
+### 5.2 Web slinging (the only way to fly)
+- **Range:** about 40 m, so players hop between rocks and can't reach the
+  enemy base in one shot. **[SPIKE]** Tune.
+- **Two hands = full speed.** With the gun holstered, a player can sling with
+  both hands, Spider-Man style. With the gun drawn, they have one web hand.
+  The choice between moving fast and being ready to shoot is a nice tension
+  for every player, not just the carrier.
+- **Gun hand:** while the gun is held, its trigger is blocked from firing a
+  web, so pulling the trigger only shoots.
+- **A little drag**, so players slowly come to a stop instead of drifting
+  forever.
+- **Stick air control kept low**, for fine adjustments only.
+- **Never stranded:** asteroids are spaced so a web anchor is always in range.
+  Each planet's gravity well also gently pulls in anyone drifting nearby.
+- **Bird flight off** and **teleport off** in the arena.
 
-Hand roles: the **gun hand** holds the gun. The SDK can block the trigger from
-firing the grapple while the gun is held. The **free hand** grapples.
+### 5.3 Walk-anywhere planets
+The goal: touch a planet anywhere and your body turns so your feet face the
+planet, gravity pulls straight toward its centre, and you can walk all the
+way around it.
 
-### 5.3 Planet gravity
-- Each landing deck has a **gravity zone** (a trigger volume). When a player
-  enters it, their page sets gravity toward the deck. When they leave, gravity
-  goes back to zero.
-- **Recommendation: all landing decks face the same way** (world up), so the
-  game only ever switches between "normal gravity" and "zero-g". That avoids
-  the unknown below.
-- **[SPIKE] Walking all the way around a round planet** would need gravity
-  that points at the planet's centre and changes as the player moves. The SDK
-  can change the gravity direction, but the docs say players "don't tumble
-  yet", which suggests the avatar stays upright. On the side of a sphere, an
-  upright player would just slide off. Prototype it before committing; until
-  then, use flat-topped planets.
+**Gravity toward the centre: the docs support it.** Each player's page knows
+where its own player is (`pose-update`, up to 30 times a second). It finds
+the planet whose gravity well they're in and calls
+`scene.Gravity(towardCentre × strength)`. Outside every well, it sets zero.
+Small planets can have weaker gravity than big ones.
+
+**Turning the player to the surface: not in the docs. This is the
+biggest risk in the project.** There is no call to tilt a player's body or
+"up" direction:
+- `TeleportTo` and spawns only take a turn around the vertical axis.
+- The settings page says "players don't tumble yet". The avatar appears to
+  stay upright to the world, so on the side of a planet, players would
+  stand sideways and slide off.
+
+The same page lists a tumble-related setting as already applied in the app
+"but players don't tumble yet", which suggests the developers are working on
+free player rotation. Three paths, in order:
+
+1. **Ask SideQuest first.** Ask whether player rotation (custom "up" or
+   tumbling) is coming, and when. If it lands, this feature becomes simple.
+2. **[SPIKE] "Planet walker" workaround.** When a player touches a planet,
+   their page attaches them to an invisible walker object (`AttachedObject`
+   with `AvatarAttachTo`, like a vehicle). The script keeps that object
+   upright against the surface and moves it around the planet from the
+   player's stick input (VR stick events, or keys on PC, with the normal
+   stick movement blocked). Jumping or firing a web detaches the player back
+   into free flight. Two things to find out: does the player's body and view
+   *rotate* with the object, or only move with it? And does it feel OK?
+3. **Fallback:** flat landing decks on each planet that face the same way, so
+   the player never needs to tilt. This is v0.2's plan, which works with what
+   the docs confirm today.
+
+**Comfort:** in VR, turning the player's view without their control is a top
+cause of motion sickness. The turn onto the surface should be quick (about
+0.3 s) or hidden by a short fade, with a comfort option for each player.
 
 ### 5.4 Flag carrier movement
-- The carrier holds the flag in one hand and can still grapple with the other.
-- **Recommendation:** the carrier is "heavy". Reel speed drops to 60% and
-  thrusters are disabled while carrying. The defending team gets a fair chase,
-  and the escort has a job to do. **[DECIDE]** Tune the percentage in
+- The flag takes one hand, so the carrier always slings with **one hand
+  only**.
+- **Reel speed drops to 60%** while carrying, so the defending team gets a
+  fair chase and the escort has a job to do. Tune the percentage in
   playtests.
+
+### 5.5 Platform modes
+The host picks the mode in the lobby before team select:
+- **VR only:** the team pads only accept players in a headset (`scene.IsVR()`).
+  PC players can still spectate.
+- **PC only:** the reverse.
+- **Mixed:** anyone can join. The scoreboard shows a VR/PC icon next to each
+  name so teams can balance themselves.
+
+Things to know for PC players:
+- Web slinging works with Q/E.
+- Controller stick and button events don't fire on desktop, so the PC gun
+  and the planet walker's movement need keyboard input. **[SPIKE]** Desktop
+  only gets key presses, with no key-release event. That may make PC
+  walking on planets awkward.
+- PC aiming with a mouse is usually more accurate than VR aiming. If mixed
+  matches feel unfair, a small aim assist for VR or a slightly longer PC fire
+  cooldown is an option. Decide after playtests.
 
 ## 6. Match flow
 
@@ -200,8 +254,9 @@ LOBBY ─► TEAM SELECT ─► READY-UP ─► COUNTDOWN (5 s) ─► PLAYING (
   they work as real cover.
 - **Friendly fire:** off.
 - **Spawn protection:** 3 s, ended early by shooting.
-- **Knockback:** a hit gives the target a small push. In zero-g this feels
-  great and makes fights look dramatic. **[DECIDE]** Tune it (or turn it off).
+- **Knockback:** a hit gives the target a small push (`AddPlayerForce`). In
+  zero-g it can knock a player off a planet or break their swing. Strength is
+  tunable.
 
 ### 7.2 Shields
 - 3 pips. Each hit removes one.
@@ -229,6 +284,7 @@ LOBBY ─► TEAM SELECT ─► READY-UP ─► COUNTDOWN (5 s) ─► PLAYING (
 | Health | 3 pips on the vest |
 | Got hit | Flash, sound, controller buzz (`SendHapticImpulse`), small knockback |
 | Hit someone | "Ding" confirm sound for the shooter |
+| Where's "down" | A soft glow ring on the planet under your feet; the planet's gravity well edge shimmers as you cross it |
 | Flag status | Boards: HOME / TAKEN by *name* / DROPPED (countdown). Beacon on a dropped flag |
 | Direction home | A faint guide line or arrow to your home planet, because zero-g is disorienting |
 | Score & time | Boards on each home planet, on Core, in the station, on the observation deck |
@@ -312,7 +368,7 @@ user state (each player writes their own)
 - Each gun is a grabbable object in a hip holster attached to the player.
 - **Trigger:** the page tracks which hand holds the gun (from the `grab`
   event) and fires on that hand's trigger press (`button-pressed`). The gun is
-  set to block that trigger from firing the grapple while held.
+  set to block that trigger from firing a web while held.
 - **Locked** during countdown, in the brig, and while carrying the flag.
 - **[SPIKE]** Confirm that a holstered (attached) object can be grabbed and
   put back. The fallback is a gun permanently attached to the hand.
@@ -335,12 +391,12 @@ user state (each player writes their own)
   to the stand.
 
 ### 9.6 Settings by area
-| Area | Gravity | Teleport | Grapple | Jump/move |
+| Area | Gravity | Teleport | Web slinging | Jump/move |
 |---|---|---|---|---|
 | Station | normal | on | off | on |
-| Practice ring | zero | off | on | on |
+| Practice ring | zero, plus a small practice planet | off | on | on |
 | Arena (open space) | zero | **off** | on | on |
-| Landing deck | normal (toward deck) | off | on | on |
+| Inside a planet's gravity well | toward planet centre, updated as the player moves | off | on | on (planet walker if S3 works) |
 | Brig | normal | off | off | on |
 
 Each page keeps **one** `BS.SceneSettings` object and resends it whenever the
@@ -350,7 +406,7 @@ player changes area, because `SetSettings` resets anything it doesn't include.
 ### 9.7 Testing
 - The SDK's **Local Multiplayer** window runs several players in the Unity
   Editor.
-- Most movement settings (gravity, grapple, forces, teleport lock) **only work
+- Most movement settings (gravity, web slinging, forces, teleport lock) **only work
   in the app, not in Play mode**, so movement has to be tested in a headset.
 - **[SPIKE]** The SDK has a **Bot SDK** (`altspace.js`) for bots that join
   worlds and move around. It could fill empty slots for 5v5 load tests.
@@ -358,14 +414,15 @@ player changes area, because `SetSettings` resets anything it doesn't include.
 ## 10. Spikes (prototype first)
 | # | Question | Why it matters |
 |---|---|---|
-| S1 | Does `scene.Gravity(0,0,0)` + grapple + `AddPlayerForce` feel good in a headset? | The whole game rests on it |
-| S2 | Gravity zones on landing decks: smooth to enter and leave? | Landing on planets |
-| S3 | Walk-around round planets (gravity toward the centre)? | Stretch goal only |
+| S1 | Do zero-g and web slinging feel good in a headset? Does anyone get stranded? | The whole game rests on it |
+| S2 | Gravity toward a planet's centre, updated from the player's position: smooth, with no jitter? | Planet gravity |
+| S3 | Can the player be turned to stand on any part of a planet (ask SideQuest, then try the planet walker)? | Walk-anywhere planets. **Highest risk** |
 | S4 | Can a raycast hit hitbox colliders attached to other avatars, and do those colliders stay out of the way of players' bodies? | Hit detection |
 | S5 | Can a holstered gun be grabbed and re-holstered? | Gun / flag hand flow |
 | S6 | One-shot volume: 10 players × 2 shots/s plus hits. Any rate limits? | Combat networking |
 | S7 | How readable is the vest from all angles at 30–60 m? | Readability pillar |
-| S8 | Comfort: motion sickness in zero-g | Who can play at all |
+| S8 | Comfort: motion sickness in zero-g and when turning onto a surface | Who can play at all |
+| S9 | PC controls: gun, slinging, and walking on planets with key presses only | PC-only and mixed modes |
 
 ## 11. Tunable settings
 | Setting | Default |
@@ -382,9 +439,12 @@ player changes area, because `SetSettings` resets anything it doesn't include.
 | Match time | 15 min |
 | Sudden death | 2 min |
 | Min per team | 2 |
-| Grapple range | 30 m |
+| Platform mode | Mixed |
+| Web range | 40 m |
 | Carrier reel speed | 60% |
-| Thruster charges / recharge | 3 / 4 s each |
+| Planet gravity | Scaled per planet size (tune in S2) |
+| Gravity well radius | About 2× planet radius |
+| Surface turn time | 0.3 s (or a fade) |
 | Player drag | small (tune in S1) |
 | Hit knockback | small (tune) |
 
@@ -405,7 +465,7 @@ player changes area, because `SetSettings` resets anything it doesn't include.
 ## 13. Roadmap
 | Phase | Goal | Output |
 |---|---|---|
-| 0. Spikes | S1, S2, S4, S5 in a test world | Go/no-go on movement and combat |
+| 0. Spikes | Ask SideQuest about player rotation; S1, S2, S3, S4, S5 in a test world | Go/no-go on walk-anywhere planets, movement, and combat |
 | 1. Graybox | Station, arena with simple planets, brigs | Flyable world |
 | 2. Core loop | Referee, teams, guns, hits, brig, respawn | 2v2 playtest |
 | 3. Flag | Grab, carry-locks-gun, drop, return, capture, sudden death | 5v5 playtest |
@@ -413,15 +473,11 @@ player changes area, because `SetSettings` resets anything it doesn't include.
 | 5. Extras | More maps, modes, cosmetics | Post-launch |
 
 ## 14. Open decisions
-1. **VR and desktop.** Controller button events don't reach desktop
-   players, and zero-g movement is built around hands. **Recommendation:**
-   VR-only for team play; desktop players can spectate. The team pads can
-   check `scene.IsVR()`.
-2. **Carrier penalty.** Reel speed 60% and no thrusters, or no penalty?
-3. **Hit knockback:** on or off?
-4. **Team names** beyond Red Planet / Blue Planet.
-5. **Planet style:** flat landing decks (recommended) vs walk-around planets
-   (depends on S3).
+1. **If player rotation isn't possible yet** (S3 fails and SideQuest has no
+   date): launch with flat landing decks and add walk-anywhere later, or wait
+   for it?
+2. **Mixed-mode fairness tweaks** (VR aim assist or PC fire cooldown): decide
+   after playtests.
 
 ## Sources
 AltspaceVR Creator docs: https://altvr.app/docs/ (pages used: Multiplayer, User
