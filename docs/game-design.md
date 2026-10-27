@@ -193,6 +193,47 @@ free player rotation. Three paths, in order:
 cause of motion sickness. The turn onto the surface should be quick (about
 0.3 s) or hidden by a short fade, with a comfort option for each player.
 
+### 5.3a Reference: the GravityRaycastSystem package
+A community example package (`GravityRaycastSystem.unitypackage`, a Visual
+Scripting graph plus a settings panel) was reviewed for this design.
+
+**What it does:**
+- Small marker objects are attached to the player's head, hips, and hands
+  (`AttachedObject`).
+- Every 0.01 s the graph casts short rays (2.5 m) from the head (and
+  optionally the feet or a hand) at set angles.
+- On a hit it sets `Physics.gravity = −(surface normal) × 9.81`.
+- With no hit it resets gravity to normal (straight down).
+- It does **not** rotate the player. Any tilting of the avatar has to come
+  from the app's own player controller reacting to the new gravity direction.
+
+**What we keep:** the approach. A local graph or script that changes
+`Physics.gravity` from a raycast uses only SDK features (attachments,
+`Physics.Raycast`, setting gravity), so it should pass the Builder's checks.
+
+**What we change for planets:**
+1. **No hit → zero-g, not normal gravity.** Inside a planet's gravity well,
+   keep pulling toward the planet even when the ray misses. That stops a
+   player who walks over a crater edge or jumps from losing gravity
+   mid-step. Only leaving the well sets zero.
+2. **Aim at the planet's centre, not the surface normal.** Normals jump
+   around on rocks, crater walls, and low-poly facets. The ray (or the
+   well's trigger) tells us *which* planet; gravity then points at that
+   planet's centre. Use a sphere collider for each planet's gravity, with
+   detailed mesh colliders only for what players stand on.
+3. **Ignore players, flags and guns in the ray**, so a teammate or a held
+   object can't flip someone's gravity. Give the rays their own layer mask.
+4. **Port it to the game's JavaScript**, or keep it as a graph that reads the
+   game's state, so the brig, lobby and arena can switch it on and off.
+5. **Ignore the package's `WorldCanvas.cs`.** Custom C# scripts don't run in
+   published worlds (only in Play mode), so the settings panel may need
+   another way to face the player.
+
+**Still open (S3):** whether the app turns the avatar to match a sideways
+gravity direction. Checking this is the first test: drop the package into a
+world, walk onto a wall in the headset, and see whether the body and view
+tilt.
+
 ### 5.4 Flag carrier movement
 - The flag takes one hand, so the carrier always slings with **one hand
   only**.
@@ -416,7 +457,7 @@ player changes area, because `SetSettings` resets anything it doesn't include.
 |---|---|---|
 | S1 | Do zero-g and web slinging feel good in a headset? Does anyone get stranded? | The whole game rests on it |
 | S2 | Gravity toward a planet's centre, updated from the player's position: smooth, with no jitter? | Planet gravity |
-| S3 | Can the player be turned to stand on any part of a planet (ask SideQuest, then try the planet walker)? | Walk-anywhere planets. **Highest risk** |
+| S3 | Does the app turn the avatar to match sideways gravity? Test with the GravityRaycastSystem package (5.3a) first, then ask SideQuest, then try the planet walker | Walk-anywhere planets. **Highest risk** |
 | S4 | Can a raycast hit hitbox colliders attached to other avatars, and do those colliders stay out of the way of players' bodies? | Hit detection |
 | S5 | Can a holstered gun be grabbed and re-holstered? | Gun / flag hand flow |
 | S6 | One-shot volume: 10 players × 2 shots/s plus hits. Any rate limits? | Combat networking |
