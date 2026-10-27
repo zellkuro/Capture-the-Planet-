@@ -205,9 +205,18 @@ whose built-in behaviour matches.
 | 20 | Grabbable | Flags, guns | SDK grab layer |
 
 Gravity rays use a layer mask with only 6 and 7. Gun rays use 6, 7, 8 and 14,
-so planets, the station, and rocks all block shots. **[SPIKE]** The web can
-attach to the Grabbable layer, so players may be able to web the flag.
-Decide whether that's a feature (yank the flag toward you) or blocked.
+so planets, the station, and rocks all block shots.
+
+**No stealing the flag with webs (decided).** The web can attach to the
+Grabbable layer, which the flag has to be on. So:
+- The flag's Rigidbody stays **kinematic whenever nobody is holding it** (at
+  its stand and when dropped). A web that hits it can't move it; at most it
+  pulls the *player* toward the flag, like any other anchor.
+- **Force grab stays off** (`EnableForceGrab: false`), so a player has to
+  reach it with their hand.
+- **[SPIKE]** Confirm a web on a kinematic grabbable object leaves it still.
+  If not, the flag's grab collider is shrunk to a small handle inside a
+  non-webbable shell (a trigger on a slot the web ignores).
 
 **Comfort:** turning the player's view without their control is a top cause
 of motion sickness in VR. The blend above helps; add a per-player comfort
@@ -313,7 +322,8 @@ LOBBY ─► TEAM SELECT ─► READY-UP ─► COUNTDOWN (5 s) ─► PLAYING (
   and if they carried the flag it drops where they were hit.
 
 ### 7.3 The flag
-- **Grab** the enemy flag from its stand or wherever it floats.
+- **Grab** the enemy flag from its stand or wherever it floats. It must be
+  taken by hand; webs can't pull it (see 5.3).
 - **While holding it, your gun is locked.** Grabbing the flag puts your gun
   back in its holster. To shoot again, let go of the flag and draw the gun:
   a quick-draw moment.
@@ -521,9 +531,7 @@ player changes area, because `SetSettings` resets anything it doesn't include.
 | 5. Extras | More maps, modes, cosmetics | Post-launch |
 
 ## 14. Open decisions
-1. **Webbing the flag:** allow players to web the flag and yank it toward
-   them, or block it?
-2. **Mixed-mode fairness tweaks** (VR aim assist or PC fire cooldown): decide
+1. **Mixed-mode fairness tweaks** (VR aim assist or PC fire cooldown): decide
    after playtests.
 
 ## Sources
