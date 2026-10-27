@@ -8,6 +8,17 @@ avatar tilting to match gravity. These are spikes S1–S3 in
 The whole world is built by `WebRoot/script.js`, so the Unity scene stays
 empty apart from the SDK.
 
+## Preview
+Rough renders of the layout (made with three.js from the script's own layout
+data, not screenshots from the app; lighting, materials and text will look
+different in Altspace):
+
+| | |
+|---|---|
+| ![Overview](../docs/images/test-world/overview.png) Overview | ![Top-down map](../docs/images/test-world/plan.png) Top-down map |
+| ![From the spawn point](../docs/images/test-world/spawn.png) From the spawn point | ![Web slinging to the planet](../docs/images/test-world/web.png) Web slinging to the planet |
+| ![Standing on the planet's side](../docs/images/test-world/planet.png) Standing on the planet's side: the station hangs sideways in the sky | |
+
 ## What's in it
 | Thing | Where | Layer | What to test |
 |---|---|---|---|
